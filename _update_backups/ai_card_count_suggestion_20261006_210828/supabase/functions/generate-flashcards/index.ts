@@ -1,7 +1,6 @@
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 type Settings = {
@@ -22,11 +21,6 @@ type GeneratedCard = {
   difficulty?: 'easy' | 'medium' | 'hard'
 }
 
-type TopicPlan = {
-  name?: string
-  recommendedCards?: number
-}
-
 const systemPrompt = `You are a document-grounded educational flashcard generator.
 The supplied source material is the PRIMARY AND AUTHORITATIVE source.
 
@@ -42,13 +36,6 @@ STRICT RULES:
 9. Every card must include sourceFile and a short verbatim sourceExcerpt that directly supports the answer.
 10. Return JSON only. No markdown, no commentary.`
 
-const topicAnalysisSystemPrompt = `You are an educational coverage planner. Analyze ONLY the supplied document text.
-Your job is to identify the distinct study-relevant topics and subtopics that deserve flashcard coverage.
-Use the source's own terminology for topic names whenever possible.
-Do not invent topics. Do not count trivial formatting, isolated examples, or repeated wording as separate topics.
-For each topic, recommend the minimum practical number of flashcards needed to cover its important definitions, concepts, facts, processes, formulas, names, dates, or relationships.
-Return JSON only.`
-
 function makePrompt(source: string, settings: Settings, count: number, title: string) {
   return `DECK TITLE: ${title || 'Untitled'}
 REQUESTED CARD COUNT: ${count}
@@ -59,7 +46,6 @@ CONTENT FOCUS: ${(settings.contentFocus || []).join(', ') || 'important educatio
 CUSTOM INSTRUCTIONS: ${settings.customInstructions || 'None'}
 
 When SOURCE WORDING PREFERENCE is exact, preserve definitions and key terminology almost verbatim. Change only what is needed to form a clear question.
-Distribute the requested cards across the source's important topics so that major topics are not skipped.
 
 Return exactly this JSON shape:
 {
@@ -78,46 +64,6 @@ Return exactly this JSON shape:
 
 SOURCE MATERIAL:
 ${source}`
-}
-
-function makeTopicPrompt(source: string, settings: Settings) {
-  return `CONTENT FOCUS: ${(settings.contentFocus || []).join(', ') || 'all important educational content'}
-CUSTOM INSTRUCTIONS: ${settings.customInstructions || 'None'}
-
-Identify every distinct study-relevant topic or subtopic present in this source chunk.
-For each topic, estimate how many flashcards are needed for meaningful coverage without unnecessary repetition.
-Use 1 card for a very small/simple topic, 2-3 for a normal topic, and 4-6 only for a dense topic with several important points.
-
-Return exactly:
-{
-  "topics": [
-    { "name": "topic name using source terminology", "recommendedCards": 2 }
-  ]
-}
-
-SOURCE CHUNK:
-${source}`
-}
-
-function makeAggregateTopicPrompt(plans: TopicPlan[], settings: Settings) {
-  return `The following topic plans were extracted from chunks of ONE study document.
-Merge duplicate or overlapping topics that refer to the same concept, while preserving distinct subtopics that need separate study coverage.
-Then recommend the minimum practical TOTAL number of flashcards needed so every important detected topic is represented and dense topics receive enough cards.
-The application supports at most 100 cards, so recommendedCount must be between 1 and 100. If full detail would ideally need more than 100, return 100 and mention the cap briefly in the reason.
-
-CONTENT FOCUS: ${(settings.contentFocus || []).join(', ') || 'all important educational content'}
-CUSTOM INSTRUCTIONS: ${settings.customInstructions || 'None'}
-
-Return exactly:
-{
-  "recommendedCount": 30,
-  "topicCount": 10,
-  "topics": ["Topic 1", "Topic 2"],
-  "reason": "One short sentence explaining the recommendation."
-}
-
-TOPIC PLANS:
-${JSON.stringify(plans)}`
 }
 
 function splitSource(text: string, maxChars = 45000) {
@@ -140,7 +86,7 @@ function cleanJson(text: string) {
   return text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '')
 }
 
-async function callProvider(system: string, user: string) {
+async function callAi(source: string, settings: Settings, count: number, title: string) {
   const apiKey = Deno.env.get('AI_API_KEY')
   const endpoint = Deno.env.get('AI_API_URL') || 'https://api.openai.com/v1/chat/completions'
   const model = Deno.env.get('AI_MODEL') || 'gpt-4.1-mini'
@@ -151,10 +97,10 @@ async function callProvider(system: string, user: string) {
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
-      temperature: 0.1,
+      temperature: 0.15,
       messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: makePrompt(source, settings, count, title) },
       ],
     }),
   })
@@ -162,49 +108,7 @@ async function callProvider(system: string, user: string) {
   const json = await response.json()
   const content = json?.choices?.[0]?.message?.content
   if (!content) throw new Error('AI provider returned no content.')
-  return JSON.parse(cleanJson(content))
-}
-
-async function callAi(source: string, settings: Settings, count: number, title: string) {
-  return await callProvider(systemPrompt, makePrompt(source, settings, count, title)) as { deckTitle?: string; flashcards?: GeneratedCard[] }
-}
-
-async function suggestCardCount(source: string, settings: Settings) {
-  const chunks = splitSource(source, 35000)
-  const plans: TopicPlan[] = []
-
-  for (const chunk of chunks) {
-    const result = await callProvider(topicAnalysisSystemPrompt, makeTopicPrompt(chunk, settings)) as { topics?: TopicPlan[] }
-    if (Array.isArray(result.topics)) {
-      for (const topic of result.topics) {
-        const name = String(topic?.name || '').trim()
-        if (!name) continue
-        plans.push({
-          name,
-          recommendedCards: Math.max(1, Math.min(6, Math.round(Number(topic.recommendedCards) || 1))),
-        })
-      }
-    }
-  }
-
-  if (!plans.length) throw new Error('The AI could not identify study topics from the extracted text.')
-
-  const finalPlan = await callProvider(
-    topicAnalysisSystemPrompt,
-    makeAggregateTopicPrompt(plans, settings),
-  ) as { recommendedCount?: number; topicCount?: number; topics?: string[]; reason?: string }
-
-  const recommendedCount = Math.max(1, Math.min(100, Math.round(Number(finalPlan.recommendedCount) || 20)))
-  const topics = Array.isArray(finalPlan.topics)
-    ? finalPlan.topics.map((value) => String(value).trim()).filter(Boolean).slice(0, 20)
-    : []
-
-  return {
-    recommendedCount,
-    topicCount: Math.max(1, Math.round(Number(finalPlan.topicCount) || topics.length || 1)),
-    topics,
-    reason: String(finalPlan.reason || 'Recommended to give every important detected topic meaningful flashcard coverage.'),
-  }
+  return JSON.parse(cleanJson(content)) as { deckTitle?: string; flashcards?: GeneratedCard[] }
 }
 
 Deno.serve(async (req) => {
@@ -214,18 +118,9 @@ Deno.serve(async (req) => {
     const sourceContent = String(body.sourceContent || '')
     const settings = (body.settings || {}) as Settings
     const title = String(body.deckTitle || '')
-    const action = String(body.action || 'generate')
+    const requested = Math.max(1, Math.min(100, Number(settings.cardCount) || 20))
     if (!sourceContent.trim()) throw new Error('No source content was provided.')
 
-    if (action === 'suggest-card-count') {
-      const suggestion = await suggestCardCount(sourceContent, settings)
-      return new Response(JSON.stringify(suggestion), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const requested = Math.max(1, Math.min(100, Number(settings.cardCount) || 20))
     const chunks = splitSource(sourceContent)
     const perChunk = Math.max(1, Math.ceil(requested / chunks.length))
     const all: GeneratedCard[] = []
