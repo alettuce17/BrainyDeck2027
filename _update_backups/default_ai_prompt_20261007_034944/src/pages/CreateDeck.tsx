@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileUp, Sparkles, Plus, X, LoaderCircle, Lightbulb, Copy, ClipboardPaste, Download } from 'lucide-react'
+import { FileUp, Sparkles, Plus, X, LoaderCircle, Lightbulb, Copy, ClipboardPaste } from 'lucide-react'
 import type { CardType, Deck, Difficulty, GenerationSettings, SourceFidelity, SourceFileData } from '../types'
 import { makeId } from '../lib/id'
 import { extractFile } from '../services/fileExtraction'
@@ -115,33 +115,6 @@ export default function CreateDeck() {
       }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Could not prepare the manual AI prompt.')
-    }
-  }
-
-  function downloadManualPrompt() {
-    setMessage('')
-    setManualStatus('')
-    try {
-      const prompt = manualPrompt || buildManualAiPrompt({ title, sources, settings })
-      if (!manualPrompt) setManualPrompt(prompt)
-
-      const safeTitle = (title.trim() || 'brainydeck')
-        .replace(/[^a-z0-9-_]+/gi, '-')
-        .replace(/^-+|-+$/g, '')
-        .toLowerCase() || 'brainydeck'
-
-      const blob = new Blob([prompt], { type: 'text/plain;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${safeTitle}-ai-prompt.txt`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-      setManualStatus('Prompt downloaded as a .txt file. Upload or paste it into your preferred AI.')
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Could not download the AI prompt.')
     }
   }
 
@@ -339,7 +312,7 @@ export default function CreateDeck() {
               <Sparkles size={18} />Generate with AI API
             </button>
             <button className="secondary-btn full" disabled={busy || !hasReadySource} onClick={() => void prepareManualPrompt()}>
-              <Copy size={18} />Get Default AI Prompt
+              <Copy size={18} />Use Gemini / ChatGPT Manually
             </button>
             <button className="secondary-btn full" disabled={busy} onClick={() => void createManual()}>
               <Plus size={18} />Create Manual Deck
@@ -348,35 +321,30 @@ export default function CreateDeck() {
         </div>
 
         {manualPrompt && <div className="card">
-          <h2>4. Default AI Prompt</h2>
-          <p className="muted">One default Brainy Deck prompt is generated from all successfully extracted files. Copy it or download it as a .txt file, then use it with Gemini, ChatGPT, Claude, or another AI.</p>
+          <h2>4. Manual AI Import</h2>
+          <p className="muted">Use this when your API quota is unavailable. The AI website does not need direct access to Brainy Deck.</p>
           {manualStatus && <div className="notice"><Copy size={16} />{manualStatus}</div>}
 
           <label>
-            Default AI prompt for all uploaded files
+            Ready-made AI prompt
             <textarea rows={10} readOnly value={manualPrompt} onFocus={(event) => event.currentTarget.select()} />
           </label>
-          <div className="action-stack">
-            <button className="secondary-btn full" type="button" onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(manualPrompt)
-                setManualStatus('Prompt copied. Paste it into Gemini, ChatGPT, Claude, or another AI.')
-              } catch {
-                setManualStatus('Clipboard access was blocked. Select the prompt above and copy it manually.')
-              }
-            }}>
-              <Copy size={18} />Copy Prompt
-            </button>
-            <button className="secondary-btn full" type="button" onClick={downloadManualPrompt}>
-              <Download size={18} />Download Prompt (.txt)
-            </button>
-          </div>
+          <button className="secondary-btn full" type="button" onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(manualPrompt)
+              setManualStatus('Prompt copied. Paste it into Gemini, ChatGPT, Claude, or another AI.')
+            } catch {
+              setManualStatus('Clipboard access was blocked. Select the prompt above and copy it manually.')
+            }
+          }}>
+            <Copy size={18} />Copy Prompt Again
+          </button>
 
           <ol className="manual-ai-steps">
-            <li>Copy the prompt, or download the prompt as a <strong>.txt</strong> file.</li>
-            <li>Paste the prompt into Gemini, ChatGPT, Claude, or another AI. You can also upload the downloaded .txt prompt if the AI supports file uploads.</li>
-            <li>Wait for the AI to return the JSON flashcards.</li>
-            <li>Copy the entire JSON response and paste it below, then click <strong>Import AI Flashcards</strong>.</li>
+            <li>Paste the prompt into Gemini, ChatGPT, Claude, or another AI.</li>
+            <li>Wait for it to return the JSON flashcards.</li>
+            <li>Copy the entire JSON response and paste it below.</li>
+            <li>Click <strong>Import AI Flashcards</strong>.</li>
           </ol>
 
           <label>
