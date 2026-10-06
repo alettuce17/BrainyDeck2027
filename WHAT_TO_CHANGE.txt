@@ -1,0 +1,55 @@
+FLASHMIND AI - ONLY THINGS YOU NEED TO PROVIDE/CHANGE
+=====================================================
+
+1) SUPABASE FRONTEND VALUES
+Create .env in the project root:
+
+VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_OR_PUBLISHABLE_KEY
+
+Do NOT put the service_role key here.
+
+2) SUPABASE DATABASE
+Run this file once in Supabase SQL Editor:
+
+supabase/migrations/001_initial.sql
+
+3) SUPABASE AUTH
+Enable Email + Password signup.
+If you want immediate signup with no email step, turn off mandatory email confirmation.
+Add your final GitHub Pages URL to Supabase Auth redirect/site URLs.
+
+4) AI EDGE FUNCTION SECRET VALUES
+Deploy:
+
+supabase/functions/generate-flashcards/index.ts
+
+Set these secrets on the Edge Function/server side:
+
+AI_API_KEY=YOUR_PRIVATE_AI_KEY
+AI_API_URL=YOUR_OPENAI_COMPATIBLE_CHAT_COMPLETIONS_URL
+AI_MODEL=YOUR_MODEL_NAME
+
+The AI key must NEVER be put in .env as VITE_* and must never be committed to GitHub.
+
+5) GITHUB REPOSITORY SECRETS
+Add these two GitHub Actions repository secrets:
+
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+
+6) GITHUB PAGES
+Set Pages deployment source to GitHub Actions.
+The included workflow deploys automatically after pushes to main.
+
+THAT IS ALL FOR THE NORMAL SETUP.
+
+Local development:
+  npm install
+  npm run dev
+
+Optional Docker test:
+  docker compose up --build
+  open http://localhost:8080
+
+No Python or Flask is used.
