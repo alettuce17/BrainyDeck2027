@@ -1,7 +1,6 @@
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed'
 export type CardType = 'qa' | 'term-definition' | 'identification' | 'fill-blank' | 'concept' | 'mixed'
 export type SourceFidelity = 'exact' | 'balanced' | 'simplified'
-export type ReviewRating = 'again' | 'hard' | 'good' | 'easy'
 
 export interface Flashcard {
   id: string
@@ -14,13 +13,9 @@ export interface Flashcard {
   favorite: boolean
   createdAt: string
   updatedAt: string
-  rating?: ReviewRating
+  rating?: 'again' | 'hard' | 'good' | 'easy'
   timesReviewed?: number
   lastReviewed?: string
-  nextReviewAt?: string
-  reviewIntervalMinutes?: number
-  reviewEase?: number
-  reviewRepetitions?: number
 }
 
 export interface SourceFileData {
