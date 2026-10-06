@@ -11,21 +11,9 @@ export interface ReviewSchedule {
 }
 
 function roundInterval(minutes: number) {
-  return Math.max(1, Math.round(minutes))
+  return Math.max(10, Math.round(minutes))
 }
 
-/**
- * Brainy Deck learning + spaced-repetition schedule.
- *
- * New/relearning cards begin with short learning steps:
- * Again = 1 minute
- * Hard  = 6 minutes
- * Good  = 10 minutes
- * Easy  = 1 day
- *
- * After a learner successfully reviews a card, the intervals grow
- * dynamically from the card's own previous interval and ease factor.
- */
 export function calculateReviewSchedule(
   card: Flashcard,
   rating: ReviewRating,
@@ -41,52 +29,27 @@ export function calculateReviewSchedule(
 
   switch (rating) {
     case 'again':
-      // A forgotten card immediately returns to the relearning stage.
-      intervalMinutes = 1
+      intervalMinutes = 10
       ease = Math.max(1.3, previousEase - 0.2)
       repetitions = 0
       break
-
     case 'hard':
-      if (previousRepetitions === 0) {
-        intervalMinutes = 6
-      } else if (previousInterval < DAY_MINUTES) {
-        // Keep a learning card close, but still move it forward slightly.
-        intervalMinutes = Math.max(6, previousInterval * 1.5)
-      } else {
-        // Mature cards receive a modest interval increase.
-        intervalMinutes = Math.max(DAY_MINUTES, previousInterval * 1.2)
-      }
+      intervalMinutes = previousInterval > 0
+        ? Math.max(DAY_MINUTES, previousInterval * 1.2)
+        : DAY_MINUTES
       ease = Math.max(1.3, previousEase - 0.15)
       repetitions = Math.max(1, previousRepetitions)
       break
-
     case 'good':
-      if (previousRepetitions === 0) {
-        // First successful learning step.
-        intervalMinutes = 10
-      } else if (previousInterval < DAY_MINUTES) {
-        // Graduate a short-learning card to a daily review.
-        intervalMinutes = DAY_MINUTES
-      } else if (previousInterval <= DAY_MINUTES) {
-        // First graduated review.
-        intervalMinutes = 3 * DAY_MINUTES
-      } else {
-        // Mature cards expand according to their ease.
-        intervalMinutes = previousInterval * previousEase
-      }
+      if (previousRepetitions === 0) intervalMinutes = DAY_MINUTES
+      else if (previousRepetitions === 1) intervalMinutes = 3 * DAY_MINUTES
+      else intervalMinutes = Math.max(DAY_MINUTES, previousInterval) * previousEase
       repetitions = previousRepetitions + 1
       break
-
     case 'easy':
-      if (previousRepetitions === 0) {
-        // Skip the short learning steps for a card the learner already knows.
-        intervalMinutes = DAY_MINUTES
-      } else if (previousInterval < DAY_MINUTES) {
-        intervalMinutes = 3 * DAY_MINUTES
-      } else {
-        intervalMinutes = previousInterval * previousEase * 1.3
-      }
+      intervalMinutes = previousRepetitions === 0
+        ? 4 * DAY_MINUTES
+        : Math.max(DAY_MINUTES, previousInterval) * previousEase * 1.3
       ease = previousEase + 0.15
       repetitions = previousRepetitions + 1
       break
@@ -119,7 +82,5 @@ export function formatReviewInterval(minutes: number) {
 }
 
 export function getReviewIntervalPreview(card: Flashcard, rating: ReviewRating) {
-  return formatReviewInterval(
-    calculateReviewSchedule(card, rating, new Date(0)).reviewIntervalMinutes,
-  )
+  return formatReviewInterval(calculateReviewSchedule(card, rating, new Date(0)).reviewIntervalMinutes)
 }
