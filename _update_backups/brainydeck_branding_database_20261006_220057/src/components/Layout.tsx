@@ -1,4 +1,4 @@
-import { BookOpen, Plus, Settings, LogIn, LogOut, Home } from 'lucide-react'
+import { BrainCircuit, BookOpen, Plus, Settings, LogIn, LogOut, Home } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -9,10 +9,7 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <img className="brand-logo" src="./branding/app-icon.png" alt="Brainy Deck" />
-          <div><strong>Brainy Deck</strong><small>Source-grounded study</small></div>
-        </div>
+        <div className="brand"><BrainCircuit size={28} /><div><strong>FlashMind AI</strong><small>Source-grounded study</small></div></div>
         <nav>
           <NavLink className={navClass} to="/"><Home size={18}/>Dashboard</NavLink>
           <NavLink className={navClass} to="/create"><Plus size={18}/>Create Deck</NavLink>

@@ -1,6 +1,5 @@
 import type { AppBackup, Deck, PromptPreset } from '../types'
 
-// Keep the existing database/key names so upgrading from FlashMind does not lose local data.
 const DB_NAME = 'flashmind-ai'
 const DB_VERSION = 1
 const DECK_STORE = 'decks'
@@ -73,7 +72,7 @@ export function savePresets(presets: PromptPreset[]) {
 
 export async function exportAll(): Promise<AppBackup> {
   return {
-    application: 'Brainy Deck',
+    application: 'FlashMind AI',
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
     decks: await listDecks(),
@@ -82,9 +81,8 @@ export async function exportAll(): Promise<AppBackup> {
 }
 
 export async function importBackup(backup: AppBackup, replace = false) {
-  const supportedApp = backup.application === 'Brainy Deck' || backup.application === 'FlashMind AI'
-  if (!supportedApp || backup.schemaVersion !== 1 || !Array.isArray(backup.decks)) {
-    throw new Error('Invalid Brainy Deck backup file.')
+  if (backup.application !== 'FlashMind AI' || backup.schemaVersion !== 1 || !Array.isArray(backup.decks)) {
+    throw new Error('Invalid FlashMind backup file.')
   }
   if (replace) {
     const existing = await listDecks()

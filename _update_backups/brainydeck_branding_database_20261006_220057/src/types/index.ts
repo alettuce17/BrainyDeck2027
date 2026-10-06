@@ -62,7 +62,7 @@ export interface PromptPreset {
 }
 
 export interface AppBackup {
-  application: 'Brainy Deck' | 'FlashMind AI'
+  application: 'FlashMind AI'
   schemaVersion: 1
   exportedAt: string
   decks: Deck[]

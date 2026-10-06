@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { Deck } from '../types'
 import { deleteDeck as deleteLocalDeck, listDecks, saveDeck as saveLocalDeck } from '../services/localStore'
-import { mergeStudyProgress, pullCloudDecks, pullStudyProgress, pushCloudDeck, pushStudyProgress, removeCloudDeck } from '../services/cloudStore'
+import { pullCloudDecks, pushCloudDeck, removeCloudDeck } from '../services/cloudStore'
 import { useAuth } from './AuthContext'
 
 type DeckContextValue = {
@@ -36,17 +36,9 @@ export function DeckProvider({ children }: { children: React.ReactNode }) {
     const localDeck: Deck = { ...deck, updatedAt: new Date().toISOString(), syncState: user ? 'syncing' : 'local' }
     await saveLocalDeck(localDeck)
     await refresh()
-
     if (user) {
       try {
-        // Deck payload remains the full backup. Dedicated study_progress rows make review state
-        // queryable and portable without removing the existing payload-based safety net.
         await pushCloudDeck(localDeck, user.id)
-        try {
-          await pushStudyProgress(localDeck, user.id)
-        } catch (progressError) {
-          console.warn('Study progress table sync failed; deck payload still contains review state.', progressError)
-        }
         await saveLocalDeck({ ...localDeck, userId: user.id, syncState: 'synced' })
       } catch {
         await saveLocalDeck({ ...localDeck, syncState: 'error' })
@@ -65,37 +57,18 @@ export function DeckProvider({ children }: { children: React.ReactNode }) {
 
   const syncNow = async () => {
     if (!user) return
-
     const local = await listDecks()
     const cloud = await pullCloudDecks(user.id)
-    let cloudProgress: Awaited<ReturnType<typeof pullStudyProgress>> = []
-
-    try {
-      cloudProgress = await pullStudyProgress(user.id)
-    } catch (progressError) {
-      // Backward compatible: the app still syncs decks even before the migration is run.
-      console.warn('Study progress table is unavailable; using deck payload progress.', progressError)
-    }
-
-    const cloudWithProgress = cloud.map((deck) => mergeStudyProgress(deck, cloudProgress))
     const byId = new Map<string, Deck>()
-
-    for (const deck of [...local, ...cloudWithProgress]) {
+    for (const deck of [...local, ...cloud]) {
       const existing = byId.get(deck.id)
       if (!existing || deck.updatedAt > existing.updatedAt) byId.set(deck.id, deck)
     }
-
     for (const deck of byId.values()) {
-      // Apply any cloud review that is newer than the selected deck's local review state.
-      const merged = mergeStudyProgress(deck, cloudProgress)
-      const normalized = { ...merged, userId: user.id, syncState: 'synced' as const }
+      const normalized = { ...deck, userId: user.id, syncState: 'synced' as const }
       await saveLocalDeck(normalized)
-      try {
-        await pushCloudDeck(normalized, user.id)
-        try { await pushStudyProgress(normalized, user.id) } catch { /* deck payload is fallback */ }
-      } catch { /* keep local */ }
+      try { await pushCloudDeck(normalized, user.id) } catch { /* keep local */ }
     }
-
     await refresh()
   }
 
